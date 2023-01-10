@@ -335,7 +335,7 @@ public class TflitePlugin implements MethodCallHandler {
     int inputChannels = shape[3];
 
     int bytePerChannel = tensor.dataType() == DataType.UINT8 ? 1 : BYTES_PER_CHANNEL;
-    ByteBuffer imgData = ByteBuffer.allocateDirect(1 * bitmapRaw.getWidth() * bitmapRaw.getHeight() * inputChannels * bytePerChannel);
+    ByteBuffer imgData = ByteBuffer.allocateDirect(1 * 320 * 240 * inputChannels * bytePerChannel);
     imgData.order(ByteOrder.nativeOrder());
 
     Bitmap bitmap = bitmapRaw;
