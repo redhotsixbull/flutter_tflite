@@ -335,14 +335,14 @@ public class TflitePlugin implements MethodCallHandler {
     int inputChannels = shape[3];
 
     int bytePerChannel = tensor.dataType() == DataType.UINT8 ? 1 : BYTES_PER_CHANNEL;
-    ByteBuffer imgData = ByteBuffer.allocateDirect(1 * inputSize * inputSize * inputChannels * bytePerChannel);
+    ByteBuffer imgData = ByteBuffer.allocateDirect(1 * 320 * 240 * inputChannels * bytePerChannel);
     imgData.order(ByteOrder.nativeOrder());
 
     Bitmap bitmap = bitmapRaw;
     if (bitmapRaw.getWidth() != inputSize || bitmapRaw.getHeight() != inputSize) {
       Matrix matrix = getTransformationMatrix(bitmapRaw.getWidth(), bitmapRaw.getHeight(),
-          inputSize, inputSize, false);
-      bitmap = Bitmap.createBitmap(inputSize, inputSize, Bitmap.Config.ARGB_8888);
+          320, 240, false);
+      bitmap = Bitmap.createBitmap(320, 240, Bitmap.Config.ARGB_8888);
       final Canvas canvas = new Canvas(bitmap);
       if (inputChannels == 1){
         Paint paint = new Paint();
@@ -357,8 +357,8 @@ public class TflitePlugin implements MethodCallHandler {
     }
 
     if (tensor.dataType() == DataType.FLOAT32) {
-      for (int i = 0; i < inputSize; ++i) {
-        for (int j = 0; j < inputSize; ++j) {
+      for (int i = 0; i < 240; ++i) {
+        for (int j = 0; j < 320; ++j) {
           int pixelValue = bitmap.getPixel(j, i);
           if (inputChannels > 1){
             imgData.putFloat((((pixelValue >> 16) & 0xFF) - mean) / std);
@@ -370,8 +370,8 @@ public class TflitePlugin implements MethodCallHandler {
         }
       }
     } else {
-      for (int i = 0; i < inputSize; ++i) {
-        for (int j = 0; j < inputSize; ++j) {
+      for (int i = 0; i < 240; ++i) {
+        for (int j = 0; j < 320; ++j) {
           int pixelValue = bitmap.getPixel(j, i);
           if (inputChannels > 1){
             imgData.put((byte) ((pixelValue >> 16) & 0xFF));
