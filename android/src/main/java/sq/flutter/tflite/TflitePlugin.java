@@ -58,7 +58,7 @@ public class TflitePlugin implements MethodCallHandler {
   private boolean tfLiteBusy = false;
   private int inputSize = 0;
   private Vector<String> labels;
-  float[][] labelProb;
+  float[][][][] labelProb;
   private static final int BYTES_PER_CHANNEL = 4;
 
   String[] partNames = {
@@ -234,39 +234,39 @@ public class TflitePlugin implements MethodCallHandler {
     }
     tfLite = new Interpreter(buffer, tfliteOptions);
 
-    String labels = args.get("labels").toString();
+//    String labels = args.get("labels").toString();
 
-    if (labels.length() > 0) {
-      if (isAsset) {
-        key = mRegistrar.lookupKeyForAsset(labels);
-        loadLabels(assetManager, key);
-      } else {
-        loadLabels(null, labels);
-      }
-    }
+//    if (labels.length() > 0) {
+//      if (isAsset) {
+//        key = mRegistrar.lookupKeyForAsset(labels);
+//        loadLabels(assetManager, key);
+//      } else {
+//        loadLabels(null, labels);
+//      }
+//    }
 
     return "success";
   }
 
-  private void loadLabels(AssetManager assetManager, String path) {
-    BufferedReader br;
-    try {
-      if (assetManager != null) {
-        br = new BufferedReader(new InputStreamReader(assetManager.open(path)));
-      } else {
-        br = new BufferedReader(new InputStreamReader(new FileInputStream(new File(path))));
-      }
-      String line;
-      labels = new Vector<>();
-      while ((line = br.readLine()) != null) {
-        labels.add(line);
-      }
-      labelProb = new float[1][labels.size()];
-      br.close();
-    } catch (IOException e) {
-      throw new RuntimeException("Failed to read label file", e);
-    }
-  }
+//  private void loadLabels(AssetManager assetManager, String path) {
+//    BufferedReader br;
+//    try {
+//      if (assetManager != null) {
+//        br = new BufferedReader(new InputStreamReader(assetManager.open(path)));
+//      } else {
+//        br = new BufferedReader(new InputStreamReader(new FileInputStream(new File(path))));
+//      }
+//      String line;
+//      labels = new Vector<>();
+//      while ((line = br.readLine()) != null) {
+//        labels.add(line);
+//      }
+//      labelProb = new float[1][labels.size()];
+//      br.close();
+//    } catch (IOException e) {
+//      throw new RuntimeException("Failed to read label file", e);
+//    }
+//  }
 
   private List<Map<String, Object>> GetTopN(int numResults, float threshold) {
     PriorityQueue<Map<String, Object>> pq =
@@ -279,16 +279,16 @@ public class TflitePlugin implements MethodCallHandler {
               }
             });
 
-    for (int i = 0; i < labels.size(); ++i) {
-      float confidence = labelProb[0][i];
-      if (confidence > threshold) {
-        Map<String, Object> res = new HashMap<>();
-        res.put("index", i);
-        res.put("label", labels.size() > i ? labels.get(i) : "unknown");
-        res.put("confidence", confidence);
-        pq.add(res);
-      }
-    }
+//    for (int i = 0; i < labels.size(); ++i) {
+//      float confidence = labelProb[0][i];
+//      if (confidence > threshold) {
+//        Map<String, Object> res = new HashMap<>();
+//        res.put("index", i);
+//        res.put("label", labels.size() > i ? labels.get(i) : "unknown");
+//        res.put("confidence", confidence);
+//        pq.add(res);
+//      }
+//    }
 
     final ArrayList<Map<String, Object>> recognitions = new ArrayList<>();
     int recognitionsSize = Math.min(pq.size(), numResults);
