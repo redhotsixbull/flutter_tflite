@@ -269,37 +269,66 @@ public class TflitePlugin implements MethodCallHandler {
     }
   }
 
-  private List<Map<String, Object>> GetTopN(int numResults, float threshold) {
-    PriorityQueue<Map<String, Object>> pq =
-        new PriorityQueue<>(
-            1,
-            new Comparator<Map<String, Object>>() {
-              @Override
-              public int compare(Map<String, Object> lhs, Map<String, Object> rhs) {
-                return Float.compare((float) rhs.get("confidence"), (float) lhs.get("confidence"));
-              }
-            });
+  private float[] GetTopN(int numResults, float threshold) {
+    // PriorityQueue<Map<String, Object>> pq =
+    //     new PriorityQueue<>(
+    //         1,
+    //         new Comparator<Map<String, Object>>() {
+    //           @Override
+    //           public int compare(Map<String, Object> lhs, Map<String, Object> rhs) {
+    //             return Float.compare((float) rhs.get("confidence"), (float) lhs.get("confidence"));
+    //           }
+    //         });
 
-//    for (int i = 0; i < labels.size(); ++i) {
-//      float confidence = labelProb[0][i];
-//      if (confidence > threshold) {
-//        Map<String, Object> res = new HashMap<>();
-//        res.put("index", i);
-//        res.put("label", labels.size() > i ? labels.get(i) : "unknown");
-//        res.put("confidence", confidence);
-//        pq.add(res);
-//      }
-//    }
 
-    final ArrayList<Map<String, Object>> recognitions = new ArrayList<>();
-    int recognitionsSize = Math.min(pq.size(), numResults);
-    for (int i = 0; i < recognitionsSize; ++i) {
-      recognitions.add(pq.poll());
+    // for (int i = 0; i < labels.size(); ++i) {
+    //   // float confidence = labelProb[0][i];
+    //   float confidence = 1f;
+    //   if (confidence > threshold) {
+    //     Map<String, Object> res = new HashMap<>();
+    //     res.put("index", i);
+    //     res.put("label", labelProb[0][i][0][0]);
+    //     res.put("confidence", confidence);
+    //     res.put("raw",labelProb);
+    //     pq.add(res);
+    //   }
+    // }
+
+
+
+
+    //final ArrayList<Map<String, Object>> recognitions = new ArrayList<>();
+    // int recognitionsSize = Math.min(pq.size(), numResults);
+    // for (int i = 0; i < recognitionsSize; ++i) {
+    //   recognitions.add(pq.poll());
+    // }
+
+    // Map<String, float[][][][]> res = new HashMap<>();
+
+    final float[] recognitions = new float[48];
+    // res.put("result",labelProb);
+
+
+    for(int i =0; i< 24; i++ ) {
+      float max = 0;
+      int locationX =0;
+      int locationY =0;
+
+      for(int j =0; j<60; j++) {
+        for(int k=0; k<80; k ++) {
+          if( max < labelProb[0][k][j][i]) {
+            max = labelProb[0][k][j][i];
+            locationX = j;
+            locationY = k;
+          }
+        }
+      }
+      recognitions[2*i] = locationX;
+      recognitions[2*i+1] = locationY;
     }
 
     return recognitions;
   }
-
   Bitmap feedOutput(ByteBuffer imgData, float mean, float std) {
     Tensor tensor = tfLite.getOutputTensor(0);
     int outputSize = tensor.shape()[1];
