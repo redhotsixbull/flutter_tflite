@@ -334,6 +334,8 @@ public class TflitePlugin implements MethodCallHandler {
     int outputSize = tensor.shape()[1];
     Bitmap bitmapRaw = Bitmap.createBitmap(outputSize, outputSize, Bitmap.Config.ARGB_8888);
 
+    System.out.print(tensor.dataType());
+
     if (tensor.dataType() == DataType.FLOAT32) {
       for (int i = 0; i < outputSize; ++i) {
         for (int j = 0; j < outputSize; ++j) {
