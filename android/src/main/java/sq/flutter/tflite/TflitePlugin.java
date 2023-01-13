@@ -1,5 +1,7 @@
 package sq.flutter.tflite;
 
+import static android.os.Environment.DIRECTORY_DCIM;
+
 import android.content.Context;
 import android.content.res.AssetFileDescriptor;
 import android.content.res.AssetManager;
@@ -11,6 +13,7 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.BitmapFactory;
 import android.os.AsyncTask;
+import android.os.Environment;
 import android.os.SystemClock;
 import android.renderscript.Allocation;
 import android.renderscript.Element;
@@ -39,6 +42,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
 import java.io.InputStreamReader;
+import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.MappedByteBuffer;
@@ -236,7 +240,8 @@ public class TflitePlugin implements MethodCallHandler {
 
     String labels = args.get("labels").toString();
 
-    loadLabels(null, labels);
+    key = mRegistrar.lookupKeyForAsset(labels);
+    loadLabels(assetManager, key);
 //    if (labels.length() > 0) {
 //      if (isAsset) {
 //        key = mRegistrar.lookupKeyForAsset(labels);
@@ -279,6 +284,7 @@ public class TflitePlugin implements MethodCallHandler {
     //             return Float.compare((float) rhs.get("confidence"), (float) lhs.get("confidence"));
     //           }
     //         });
+
 
 
     // for (int i = 0; i < labels.size(); ++i) {
@@ -357,9 +363,24 @@ public class TflitePlugin implements MethodCallHandler {
         }
       }
     }
+
+    //TODO save image data
+
+    if(createTodoOneImage == false) {
+      try {
+        bitmapToFile(bitmapRaw,"feedOutput");
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+      createTodoOneImage = true;
+    }
+
     return bitmapRaw;
   }
 
+  boolean createTodoOneImage = false;
+  boolean createFeedInputTensor = false;
+  
   ByteBuffer feedInputTensor(Bitmap bitmapRaw, float mean, float std) throws IOException {
     Tensor tensor = tfLite.getInputTensor(0);
     int[] shape = tensor.shape();
@@ -375,6 +396,17 @@ public class TflitePlugin implements MethodCallHandler {
       Matrix matrix = getTransformationMatrix(bitmapRaw.getWidth(), bitmapRaw.getHeight(),
           320, 240, false);
       bitmap = Bitmap.createBitmap(320, 240, Bitmap.Config.ARGB_8888);
+      //TODO save Image;
+
+      if(createFeedInputTensor == false ) {
+        try {
+          bitmapToFile(bitmap,"corpBitmap");
+        } catch (IOException e) {
+          e.printStackTrace();
+        }
+        createFeedInputTensor = true;
+      }
+
       final Canvas canvas = new Canvas(bitmap);
       if (inputChannels == 1){
         Paint paint = new Paint();
@@ -1614,5 +1646,25 @@ public class TflitePlugin implements MethodCallHandler {
       tfLite.close();
     labels = null;
     labelProb = null;
+  }
+
+  private File bitmapToFile( Bitmap bitmap, String fileName) throws IOException {
+    OutputStream out= null;
+
+    File file = new File(Environment.getExternalStoragePublicDirectory(DIRECTORY_DCIM)+"/mora/$fileName");
+
+    try{
+      file.getParentFile().mkdirs();
+      Log.i("bitmapToFile","Path : "+ file.getPath().toString());
+      if(file.isFile()){
+        file.delete();
+      }
+      file.createNewFile();
+      out = new FileOutputStream(file);
+      bitmap.compress(Bitmap.CompressFormat.JPEG, 80, out);
+    }finally{
+      out.close();
+    }
+    return file;
   }
 }
