@@ -262,7 +262,7 @@ public class TflitePlugin implements MethodCallHandler {
       while ((line = br.readLine()) != null) {
         labels.add(line);
       }
-      labelProb = new float[1][labels.size()][][];
+      labelProb = new float[1][labels.size()][60][24];
       br.close();
     } catch (IOException e) {
       throw new RuntimeException("Failed to read label file", e);
