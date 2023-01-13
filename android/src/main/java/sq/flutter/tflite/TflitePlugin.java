@@ -55,6 +55,11 @@ import java.util.Map;
 import java.util.PriorityQueue;
 import java.util.Vector;
 
+import org.tensorflow.lite.support.image.ImageProcessor;
+import org.tensorflow.lite.support.image.TensorImage;
+import org.tensorflow.lite.support.image.ops.ResizeOp;
+import org.tensorflow.lite.support.common.ops.NormalizeOp;
+
 
 public class TflitePlugin implements MethodCallHandler {
   private final Registrar mRegistrar;
@@ -65,21 +70,23 @@ public class TflitePlugin implements MethodCallHandler {
   float[][][][] labelProb;
   private static final int BYTES_PER_CHANNEL = 4;
 
+  private ImageProcessor imageProcessor;
+
   String[] partNames = {
-      "nose", "leftEye", "rightEye", "leftEar", "rightEar", "leftShoulder",
-      "rightShoulder", "leftElbow", "rightElbow", "leftWrist", "rightWrist",
-      "leftHip", "rightHip", "leftKnee", "rightKnee", "leftAnkle", "rightAnkle"
+          "nose", "leftEye", "rightEye", "leftEar", "rightEar", "leftShoulder",
+          "rightShoulder", "leftElbow", "rightElbow", "leftWrist", "rightWrist",
+          "leftHip", "rightHip", "leftKnee", "rightKnee", "leftAnkle", "rightAnkle"
   };
 
   String[][] poseChain = {
-      {"nose", "leftEye"}, {"leftEye", "leftEar"}, {"nose", "rightEye"},
-      {"rightEye", "rightEar"}, {"nose", "leftShoulder"},
-      {"leftShoulder", "leftElbow"}, {"leftElbow", "leftWrist"},
-      {"leftShoulder", "leftHip"}, {"leftHip", "leftKnee"},
-      {"leftKnee", "leftAnkle"}, {"nose", "rightShoulder"},
-      {"rightShoulder", "rightElbow"}, {"rightElbow", "rightWrist"},
-      {"rightShoulder", "rightHip"}, {"rightHip", "rightKnee"},
-      {"rightKnee", "rightAnkle"}
+          {"nose", "leftEye"}, {"leftEye", "leftEar"}, {"nose", "rightEye"},
+          {"rightEye", "rightEar"}, {"nose", "leftShoulder"},
+          {"leftShoulder", "leftElbow"}, {"leftElbow", "leftWrist"},
+          {"leftShoulder", "leftHip"}, {"leftHip", "leftKnee"},
+          {"leftKnee", "leftAnkle"}, {"nose", "rightShoulder"},
+          {"rightShoulder", "rightElbow"}, {"rightElbow", "rightWrist"},
+          {"rightShoulder", "rightHip"}, {"rightHip", "rightKnee"},
+          {"rightKnee", "rightAnkle"}
   };
 
   Map<String, Integer> partsIds = new HashMap<>();
@@ -380,7 +387,7 @@ public class TflitePlugin implements MethodCallHandler {
 
   boolean createTodoOneImage = false;
   boolean createFeedInputTensor = false;
-  
+
   ByteBuffer feedInputTensor(Bitmap bitmapRaw, float mean, float std) throws IOException {
     Tensor tensor = tfLite.getInputTensor(0);
     int[] shape = tensor.shape();
@@ -394,18 +401,11 @@ public class TflitePlugin implements MethodCallHandler {
     Bitmap bitmap = bitmapRaw;
     if (bitmapRaw.getWidth() != inputSize || bitmapRaw.getHeight() != inputSize) {
       Matrix matrix = getTransformationMatrix(bitmapRaw.getWidth(), bitmapRaw.getHeight(),
-          320, 240, false);
+              320, 240, false);
       bitmap = Bitmap.createBitmap(320, 240, Bitmap.Config.ARGB_8888);
       //TODO save Image;
 
-      if(createFeedInputTensor == false ) {
-        try {
-          bitmapToFile(bitmap,"corpBitmap");
-        } catch (IOException e) {
-          e.printStackTrace();
-        }
-        createFeedInputTensor = true;
-      }
+
 
       final Canvas canvas = new Canvas(bitmap);
       if (inputChannels == 1){
@@ -448,6 +448,15 @@ public class TflitePlugin implements MethodCallHandler {
       }
     }
 
+    if(createFeedInputTensor == false ) {
+      try {
+        bitmapToFile(bitmapRaw,"corpBitmap");
+      } catch (IOException e) {
+        e.printStackTrace();
+      }
+      createFeedInputTensor = true;
+    }
+
     return imgData;
   }
 
@@ -475,17 +484,27 @@ public class TflitePlugin implements MethodCallHandler {
 
     Bitmap bitmapRaw = Bitmap.createBitmap(imageWidth, imageHeight, Bitmap.Config.ARGB_8888);
     Allocation bmData = renderScriptNV21ToRGBA888(
-        mRegistrar.context(),
-        imageWidth,
-        imageHeight,
-        data);
+            mRegistrar.context(),
+            imageWidth,
+            imageHeight,
+            data);
     bmData.copyTo(bitmapRaw);
 
     Matrix matrix = new Matrix();
     matrix.postRotate(rotation);
     bitmapRaw = Bitmap.createBitmap(bitmapRaw, 0, 0, bitmapRaw.getWidth(), bitmapRaw.getHeight(), matrix, true);
 
-    return feedInputTensor(bitmapRaw, mean, std);
+
+    if(imageProcessor==null){
+      imageProcessor = buildImageProcessor(240,320,mean,std);
+    }
+
+    TensorImage inputImageBuffer = new TensorImage(tfLite.getInputTensor(0).dataType());
+    inputImageBuffer.load(bitmapRaw);
+    imageProcessor.process(inputImageBuffer);
+    return inputImageBuffer.getBuffer();
+
+//    return feedInputTensor(bitmapRaw, mean, std);
   }
 
   public Allocation renderScriptNV21ToRGBA888(Context context, int width, int height, byte[] nv21) {
@@ -827,14 +846,14 @@ public class TflitePlugin implements MethodCallHandler {
       Log.v("time", "Inference took " + (SystemClock.uptimeMillis() - startTime));
 
       PriorityQueue<Map<String, Object>> pq =
-          new PriorityQueue<>(
-              1,
-              new Comparator<Map<String, Object>>() {
-                @Override
-                public int compare(Map<String, Object> lhs, Map<String, Object> rhs) {
-                  return Float.compare((float) rhs.get("confidenceInClass"), (float) lhs.get("confidenceInClass"));
-                }
-              });
+              new PriorityQueue<>(
+                      1,
+                      new Comparator<Map<String, Object>>() {
+                        @Override
+                        public int compare(Map<String, Object> lhs, Map<String, Object> rhs) {
+                          return Float.compare((float) rhs.get("confidenceInClass"), (float) lhs.get("confidenceInClass"));
+                        }
+                      });
 
       for (int y = 0; y < gridSize; ++y) {
         for (int x = 0; x < gridSize; ++x) {
@@ -1381,7 +1400,7 @@ public class TflitePlugin implements MethodCallHandler {
         float[] rootPoint = getImageCoords(root, outputStride, numParts, offsets);
 
         if (withinNmsRadiusOfCorrespondingPoint(
-            results, sqaredNmsRadius, rootPoint[0], rootPoint[1], (int) root.get("partId")))
+                results, sqaredNmsRadius, rootPoint[0], rootPoint[1], (int) root.get("partId")))
           continue;
 
         Map<String, Object> keypoint = new HashMap<>();
@@ -1398,7 +1417,7 @@ public class TflitePlugin implements MethodCallHandler {
           int targetKeypointId = childToParentEdges.get(edge);
           if (keypoints.containsKey(sourceKeypointId) && !keypoints.containsKey(targetKeypointId)) {
             keypoint = traverseToTargetKeypoint(edge, keypoints.get(sourceKeypointId),
-                targetKeypointId, scores, offsets, outputStride, displacementsBwd);
+                    targetKeypointId, scores, offsets, outputStride, displacementsBwd);
             keypoints.put(targetKeypointId, keypoint);
           }
         }
@@ -1408,7 +1427,7 @@ public class TflitePlugin implements MethodCallHandler {
           int targetKeypointId = parentToChildEdges.get(edge);
           if (keypoints.containsKey(sourceKeypointId) && !keypoints.containsKey(targetKeypointId)) {
             keypoint = traverseToTargetKeypoint(edge, keypoints.get(sourceKeypointId),
-                targetKeypointId, scores, offsets, outputStride, displacementsFwd);
+                    targetKeypointId, scores, offsets, outputStride, displacementsFwd);
             keypoints.put(targetKeypointId, keypoint);
           }
         }
@@ -1427,14 +1446,14 @@ public class TflitePlugin implements MethodCallHandler {
                                                              double threshold,
                                                              int localMaximumRadius) {
     PriorityQueue<Map<String, Object>> pq =
-        new PriorityQueue<>(
-            1,
-            new Comparator<Map<String, Object>>() {
-              @Override
-              public int compare(Map<String, Object> lhs, Map<String, Object> rhs) {
-                return Float.compare((float) rhs.get("score"), (float) lhs.get("score"));
-              }
-            });
+            new PriorityQueue<>(
+                    1,
+                    new Comparator<Map<String, Object>>() {
+                      @Override
+                      public int compare(Map<String, Object> lhs, Map<String, Object> rhs) {
+                        return Float.compare((float) rhs.get("score"), (float) lhs.get("score"));
+                      }
+                    });
 
     for (int heatmapY = 0; heatmapY < scores.length; ++heatmapY) {
       for (int heatmapX = 0; heatmapX < scores[0].length; ++heatmapX) {
@@ -1443,7 +1462,7 @@ public class TflitePlugin implements MethodCallHandler {
           if (score < threshold) continue;
 
           if (scoreIsMaximumInLocalWindow(
-              keypointId, score, heatmapY, heatmapX, localMaximumRadius, scores)) {
+                  keypointId, score, heatmapY, heatmapX, localMaximumRadius, scores)) {
             Map<String, Object> res = new HashMap<>();
             res.put("score", score);
             res.put("y", heatmapY);
@@ -1535,13 +1554,13 @@ public class TflitePlugin implements MethodCallHandler {
     float sourceKeypointX = (float) sourceKeypoint.get("x") * inputSize;
 
     int[] sourceKeypointIndices = getStridedIndexNearPoint(sourceKeypointY, sourceKeypointX,
-        outputStride, height, width);
+            outputStride, height, width);
 
     float[] displacement = getDisplacement(edgeId, sourceKeypointIndices, displacements);
 
     float[] displacedPoint = new float[]{
-        sourceKeypointY + displacement[0],
-        sourceKeypointX + displacement[1]
+            sourceKeypointY + displacement[0],
+            sourceKeypointX + displacement[1]
     };
 
     float[] targetKeypoint = displacedPoint;
@@ -1549,7 +1568,7 @@ public class TflitePlugin implements MethodCallHandler {
     final int offsetRefineStep = 2;
     for (int i = 0; i < offsetRefineStep; i++) {
       int[] targetKeypointIndices = getStridedIndexNearPoint(targetKeypoint[0], targetKeypoint[1],
-          outputStride, height, width);
+              outputStride, height, width);
 
       int targetKeypointY = targetKeypointIndices[0];
       int targetKeypointX = targetKeypointIndices[1];
@@ -1558,13 +1577,13 @@ public class TflitePlugin implements MethodCallHandler {
       float offsetX = offsets[targetKeypointY][targetKeypointX][targetKeypointId + numKeypoints];
 
       targetKeypoint = new float[]{
-          targetKeypointY * outputStride + offsetY,
-          targetKeypointX * outputStride + offsetX
+              targetKeypointY * outputStride + offsetY,
+              targetKeypointX * outputStride + offsetX
       };
     }
 
     int[] targetKeypointIndices = getStridedIndexNearPoint(targetKeypoint[0], targetKeypoint[1],
-        outputStride, height, width);
+            outputStride, height, width);
 
     float score = sigmoid(scores[targetKeypointIndices[0]][targetKeypointIndices[1]][targetKeypointId]);
 
@@ -1651,7 +1670,7 @@ public class TflitePlugin implements MethodCallHandler {
   private File bitmapToFile( Bitmap bitmap, String fileName) throws IOException {
     OutputStream out= null;
 
-    File file = new File(Environment.getExternalStoragePublicDirectory(DIRECTORY_DCIM)+"/mora/$fileName");
+    File file = new File(Environment.getExternalStoragePublicDirectory(DIRECTORY_DCIM)+"/mora/"+fileName +".jpg");
 
     try{
       file.getParentFile().mkdirs();
@@ -1663,8 +1682,19 @@ public class TflitePlugin implements MethodCallHandler {
       out = new FileOutputStream(file);
       bitmap.compress(Bitmap.CompressFormat.JPEG, 80, out);
     }finally{
-      out.close();
+      //out.close();
     }
     return file;
+  }
+
+
+  private ImageProcessor buildImageProcessor(int inputImageHeight,int inputImageWidth,float mean, float stddev) {
+    int resizeHeight = Math.max(inputImageWidth, inputImageHeight);
+    int resizeWidth = Math.min(inputImageWidth, inputImageHeight);
+
+    return new ImageProcessor.Builder()
+            .add(new ResizeOp(240, 320, ResizeOp.ResizeMethod.BILINEAR))
+            .add(new NormalizeOp(mean,stddev))
+            .build();
   }
 }
