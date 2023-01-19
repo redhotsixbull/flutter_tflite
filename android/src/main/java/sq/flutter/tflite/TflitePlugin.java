@@ -14,6 +14,7 @@ import android.graphics.Matrix;
 import android.graphics.Paint;
 import android.graphics.BitmapFactory;
 import android.os.AsyncTask;
+import android.os.Build;
 import android.os.Environment;
 import android.os.SystemClock;
 import android.renderscript.Allocation;
@@ -22,6 +23,8 @@ import android.renderscript.RenderScript;
 import android.renderscript.ScriptIntrinsicYuvToRGB;
 import android.renderscript.Type;
 import android.util.Log;
+
+import androidx.annotation.RequiresApi;
 
 import io.flutter.plugin.common.MethodCall;
 import io.flutter.plugin.common.MethodChannel;
@@ -340,6 +343,8 @@ public class TflitePlugin implements MethodCallHandler {
           pixelValue |= ((Math.round(imgData.getFloat() * std + mean) & 0xFF) << 16);
           pixelValue |= ((Math.round(imgData.getFloat() * std + mean) & 0xFF) << 8);
           pixelValue |= ((Math.round(imgData.getFloat() * std + mean) & 0xFF));
+          double k = Math.random();
+          String s = String.valueOf(k);
           bitmapRaw.setPixel(j, i, pixelValue);
         }
       }
@@ -363,29 +368,33 @@ public class TflitePlugin implements MethodCallHandler {
   boolean createTodoOneImage = false;
   boolean createTodoOneImage1 = false;
 
-  ByteBuffer feedInputTensorFrame(List<byte[]> bytesList, int imageHeight, int imageWidth, float mean, float std, int rotation) throws IOException {
-    ByteBuffer Y = ByteBuffer.wrap(bytesList.get(0));
-    ByteBuffer U = ByteBuffer.wrap(bytesList.get(1));
-    ByteBuffer V = ByteBuffer.wrap(bytesList.get(2));
-
-    int Yb = Y.remaining();
-    int Ub = U.remaining();
-    int Vb = V.remaining();
-
-    byte[] data = new byte[Yb + Ub + Vb];
-
-    Y.get(data, 0, Yb);
-    V.get(data, Yb, Vb);
-    U.get(data, Yb + Vb, Ub);
-
+  @RequiresApi(api = Build.VERSION_CODES.LOLLIPOP)
+  ByteBuffer feedInputTensorFrame(byte[] bytesList, int imageHeight, int imageWidth, float mean, float std, int rotation) throws IOException {
+//    ByteBuffer Y = ByteBuffer.wrap(bytesList.get(0));
+//    ByteBuffer U = ByteBuffer.wrap(bytesList.get(1));
+//    ByteBuffer V = ByteBuffer.wrap(bytesList.get(2));
+//
+//
+//
+//    int Yb = Y.remaining();
+//    int Ub = U.remaining();
+//    int Vb = V.remaining();
+//
+//    byte[] data = new byte[Yb + Ub + Vb];
+//
+//    Y.get(data, 0, Yb);
+//    V.get(data, Yb, Vb);
+//    U.get(data, Yb + Vb, Ub);
 
     Bitmap bitmapRaw = Bitmap.createBitmap(imageWidth, imageHeight, Bitmap.Config.ARGB_8888);
-    Allocation bmData = renderScriptNV21ToRGBA888(
-            mRegistrar.context(),
-            imageWidth,
-            imageHeight,
-            data);
-    bmData.copyTo(bitmapRaw);
+//    Allocation bmData = renderScriptNV21ToRGBA888(
+//            mRegistrar.context(),
+//            imageWidth,
+//            imageHeight,
+//            data);
+//    bmData.copyTo(bitmapRaw);
+    new YuvToRgbConverter(mRegistrar.context()).yuvToRgb(bytesList,bitmapRaw);
+
 
     if(createTodoOneImage1 == false) {
       try {
@@ -400,8 +409,6 @@ public class TflitePlugin implements MethodCallHandler {
     matrix.postRotate(rotation);
     bitmapRaw = Bitmap.createBitmap(bitmapRaw, 0, 0, bitmapRaw.getWidth(), bitmapRaw.getHeight(), matrix, true);
 
-
-
     if(imageProcessor == null){
       imageProcessor = buildImageProcessor(320,240,mean,std);
     }
@@ -412,11 +419,13 @@ public class TflitePlugin implements MethodCallHandler {
     inputImageBuffer.load(bitmapRaw);
 
     float[] values = inputImageBuffer.getTensorBuffer().getFloatArray();
+   
     for(int i = 0; i < values.length; ++i) {
       values[i] = (values[i] - 116.78f);
     }
 
-    inputImageBuffer.load(TensorBufferFloat.createFixedSize(inputImageBuffer.getTensorBuffer().getShape(), DataType.FLOAT32));
+
+    inputImageBuffer.load(values, inputImageBuffer.getTensorBuffer().getShape());
 
 //    for(int x =0; x<240; x++) {
 //      for(int y=0; y<320; y++){
@@ -512,7 +521,6 @@ public class TflitePlugin implements MethodCallHandler {
 
     RunModelOnFrame(HashMap args, Result result) throws IOException {
       super(args, result);
-
       List<byte[]> bytesList = (ArrayList) args.get("bytesList");
       double mean = (double) (args.get("imageMean"));
       float IMAGE_MEAN = (float) mean;
@@ -591,6 +599,7 @@ public class TflitePlugin implements MethodCallHandler {
     System.out.println("nomalize op is run");
     return new ImageProcessor.Builder()
             .add(new Rot90Op(2))
+            .add(new NormalizeOp(means,stddevs))
             .build();
 
     //.add(new ResizeOp(320, 240, ResizeOp.ResizeMethod.BILINEAR))

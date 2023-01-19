@@ -36,5 +36,7 @@ android {
         implementation 'org.tensorflow:tensorflow-lite:+'
         implementation 'org.tensorflow:tensorflow-lite-gpu:+'
         implementation 'org.tensorflow:tensorflow-lite-support:+'
+        implementation "org.jetbrains.kotlin:kotlin-stdlib:1.5.10"
+        implementation 'androidx.core:core-ktx:1.1.0'
     }
 }
